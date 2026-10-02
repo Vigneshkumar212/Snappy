@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:" />
+  <title>Snappy</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="dock">
+    <!-- Now-playing background: a gradient picked from the cover; two layers so tracks crossfade. -->
+    <div id="art" aria-hidden="true">
+      <div class="art-layers">
+        <div class="art-layer"></div>
+        <div class="art-layer"></div>
+      </div>
+      <div class="progress"><div class="fill"></div></div>
+    </div>
+
+    <!-- Page 1: what's playing. The cover sits alone first, then the text slides out from behind it. -->
+    <section id="page-media" class="page">
+      <div class="cover"></div>
+
+      <div class="np-clip">
+        <div id="np">
+          <div class="line np-title"><span class="t"></span></div>
+          <div class="line np-artist"></div>
+        </div>
+      </div>
+
+      <div class="controls">
+        <button class="ctl" data-cmd="prev" aria-label="Previous">
+          <svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zM9.5 12l8.5 6V6z" /></svg>
+        </button>
+        <button class="ctl play" data-cmd="toggle" aria-label="Play / pause">
+          <svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+          <svg class="i-pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z" /></svg>
+        </button>
+        <button class="ctl" data-cmd="next" aria-label="Next">
+          <svg viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" /></svg>
+        </button>
+      </div>
+    </section>
+
+    <!-- Page 2: connected Bluetooth devices. -->
+    <section id="page-bluetooth" class="page">
+      <div id="devices"></div>
+    </section>
+
+    <!-- Page 3: the file shelf. Drop files or text on the dock to keep them here; drag them back out later. -->
+    <section id="page-files" class="page" data-mode="view">
+      <div class="fl-layer fl-view">
+        <div class="fl-thumb" draggable="true" title="Drag it back out"></div>
+        <div class="fl-text">
+          <div class="fl-name"></div>
+          <div class="fl-meta"></div>
+        </div>
+        <button class="fl-btn fl-nav" data-act="prev" aria-label="Previous item">
+          <svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" /></svg>
+        </button>
+        <button class="fl-btn fl-nav" data-act="next" aria-label="Next item">
+          <svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" /></svg>
+        </button>
+        <button class="fl-btn fl-more" data-act="menu" aria-label="Options">
+          <svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="19" cy="12" r="2" /></svg>
+        </button>
+      </div>
+
+      <!-- The options take over the whole dock, since there's so little room. -->
+      <div class="fl-layer fl-menu">
+        <button class="fl-pill danger" data-act="remove">Remove</button>
+        <button class="fl-pill" data-act="copy-path">Copy path</button>
+        <button class="fl-pill" data-act="copy">Copy file</button>
+        <button class="fl-btn" data-act="close" aria-label="Close options">
+          <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></svg>
+        </button>
+      </div>
+
+      <div class="fl-layer fl-drop">
+        <div class="fl-drop-box">
+          <svg viewBox="0 0 24 24"><path d="M12 4v11m0 0l-4-4m4 4l4-4M5 19h14" /></svg>
+          <span>Drop to Snappy</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Page 4: short-lived notices (a device disconnecting). Takes over from the other pages while shown. -->
+    <section id="page-notice" class="page">
+      <div id="notice">
+        <div class="notice-name"></div>
+        <div class="notice-status">Disconnected</div>
+      </div>
+    </section>
+
+    <!-- Dots showing which tab you're on; scroll over the dock to switch. -->
+    <div id="tabs" aria-hidden="true" hidden></div>
+  </div>
+
+  <script src="renderer.js"></script>
+  <script src="bluetooth.js"></script>
+  <script src="nowplaying.js"></script>
+  <script src="files.js"></script>
+</body>
+</html>

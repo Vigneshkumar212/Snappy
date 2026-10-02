@@ -1,0 +1,720 @@
+:root {
+  --text: #f4f4f5;
+  --pad: 4px;      /* transparent room around the dock for its shadow (SHADOW_PAD in main.js) */
+  --dock-x: 16px;  /* horizontal padding inside the dock (bluetooth page) */
+  --media-pad: 4px; /* the cover sits this far from the dock's edges */
+
+  /* Overshoots slightly then settles: the "bounce". */
+  --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --spring-soft: cubic-bezier(0.22, 1.25, 0.5, 1);
+}
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: transparent;
+  overflow: hidden;
+  user-select: none;
+  font: 600 15px 'Segoe UI Variable Display', 'Segoe UI', sans-serif;
+  color: var(--text);
+}
+
+body {
+  box-sizing: border-box;
+  padding: var(--pad);
+}
+
+/* Width is set from JS to fit the active page and bounced with keyframes (see layoutDock() in renderer.js). */
+#dock {
+  position: relative;
+  box-sizing: border-box;
+  width: 32px;
+  height: 100%;
+  border-radius: 10px;
+}
+
+/* ---------- Pages ---------- */
+
+/* Only one page is shown at a time. The leaving page slides up and blurs out; the entering one springs in. */
+.page {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--dock-x);
+  z-index: 1; /* above the artwork */
+  display: flex;
+  align-items: center;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  /* Slides out the way the scroll is heading; --dir is 1 for "next tab", -1 for "previous". */
+  transform: translateY(calc(var(--dir, 1) * -10px));
+  filter: blur(3px);
+  transition: opacity 220ms ease, transform 220ms ease, filter 220ms ease, visibility 0s linear 220ms;
+}
+
+.page.active {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: none;
+  filter: none;
+  transition: none;
+  animation: page-in 700ms var(--spring) both;
+}
+
+@keyframes page-in {
+  from { opacity: 0; transform: translateY(calc(var(--dir, 1) * 14px)); filter: blur(4px); }
+  to { opacity: 1; transform: none; filter: blur(0); }
+}
+
+/* Tab dots, down the dock's right edge. */
+#tabs {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 2px;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 250ms ease;
+}
+
+#tabs[hidden] { display: none; }
+#dock:hover #tabs, #tabs.show { opacity: 1; }
+
+.tab-dot {
+  width: 3px;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.35);
+  transition: height 400ms var(--spring), background-color 200ms ease;
+}
+
+.tab-dot.active {
+  height: 10px;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+/* The music dock is 250px wide. While the cover is shown on its own the dock shrinks to hug it. */
+#page-media {
+  left: var(--media-pad);
+  --pad-right: 14px; /* extra room on the right, so the tab dots and the dock's edge aren't crowding the text */
+  width: var(--media-w, calc(250px - var(--media-pad) - 14px)); /* fits the text, up to 250px (set from JS) */
+  gap: 10px;
+}
+
+#dock.reveal #page-media {
+  --pad-right: var(--media-pad);
+  width: calc(var(--cover-w, 32px) * 1.25);
+}
+#page-bluetooth { width: max-content; }
+
+#devices {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+/* ---------- Now playing ---------- */
+
+/* The dock's background: a gradient picked from the cover. It wipes in from behind the cover
+   (and fades) when the cover reveal ends, and is gone while the cover is shown on its own. */
+#art {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  overflow: hidden;
+  opacity: 0;
+  clip-path: inset(0 100% 0 0 round 10px);
+  transition: opacity 450ms ease, clip-path 450ms ease;
+}
+
+#dock.has-media:not(.reveal):not(.media-out) #art {
+  opacity: 1;
+  clip-path: inset(0 0 0 0 round 10px);
+  transition: opacity 700ms ease, clip-path 900ms var(--spring);
+}
+
+/* The layers are stacked with ever-growing z-indexes for the crossfade; this keeps that contained
+   so the progress line always sits above them. */
+.art-layers {
+  position: absolute;
+  inset: 0;
+  isolation: isolate;
+}
+
+.art-layer {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 900ms ease, filter 600ms ease;
+}
+
+.art-layer.on { opacity: 1; }
+
+#dock.paused .art-layer.on { filter: saturate(0.35) brightness(0.85); }
+
+/* Progress: a flat line along the very bottom edge, in a lighter tone of the dock's own background
+   colour. Only the played portion is drawn (no track behind it), and its ends are pulled in so they
+   clear the dock's rounded corners.
+   It's drawn with scaleX (so its edge lands on fractional pixels and moves smoothly) and nudged a few
+   times a second from JS. There's deliberately no CSS transition: a continuous one makes the browser
+   redraw every frame, which cost more CPU than the rest of the dock put together. */
+.progress {
+  position: absolute;
+  left: 10px;  /* the dock's corner radius */
+  right: 10px;
+  bottom: 0;
+  height: 3px;
+  transition: opacity 400ms ease;
+}
+
+.progress .fill {
+  width: 100%;
+  height: 100%;
+  border-radius: 2px 2px 0 0;
+  background: var(--accent, #d9d9de);
+  transform-origin: left center;
+  transform: scaleX(0);
+  transition: background-color 900ms ease;
+}
+
+#dock.paused .progress { opacity: 0.6; }
+
+/* The progress line belongs to the music page; hide it while Bluetooth pages are showing. */
+#dock:not([data-page='media']) .progress { opacity: 0; }
+
+/* The cover keeps its own aspect ratio. It grows a little while shown on its own. */
+.cover {
+  position: relative;
+  z-index: 2; /* above the text, which slides out from behind it */
+  flex: none;
+  width: var(--cover-w, 32px);
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  background-size: cover;
+  background-position: center;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 16px;
+  transform-origin: left center;
+  scale: 1;
+  transition: scale 800ms var(--spring), filter 400ms ease;
+}
+
+.cover.empty { background-image: linear-gradient(135deg, #3a3a46, #1c1c22); }
+.cover.empty::after { content: '\266A'; }
+
+#dock.reveal .cover { scale: 1.25; }
+#dock.paused .cover { filter: saturate(0.5) brightness(0.88); }
+
+.cover.pop { animation: cover-in 650ms var(--spring) both; }
+
+@keyframes cover-in {
+  from { opacity: 0; filter: blur(4px); translate: 0 6px; }
+}
+
+/* Text lives in a clipped box that starts at the cover's right edge, so it appears to come out from behind it. */
+.np-clip {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  min-width: 0;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+}
+
+#np {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+  width: 100%;
+  padding-bottom: 3px; /* clear of the progress line */
+  transition: opacity 700ms ease 150ms, transform 850ms var(--spring) 150ms, filter 700ms ease 150ms;
+}
+
+#dock.paused #np { opacity: 0.7; }
+
+/* Cover reveal: text is tucked behind the cover; it slides out when the class is removed. */
+#dock.reveal #np {
+  opacity: 0;
+  transform: translateX(-48px);
+  filter: blur(3px);
+  transition-duration: 250ms;
+  transition-delay: 0s;
+}
+
+.line { overflow: hidden; white-space: nowrap; }
+
+.np-title {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.np-title.overflowing {
+  -webkit-mask-image: linear-gradient(90deg, #000 88%, transparent);
+}
+
+/* Long titles drift sideways, pause, and drift back: once per track, then rest. It keeps looping
+   while you hover. (A never-ending animation redraws the window every frame, about 23% of a core.) */
+.np-title .t {
+  display: inline-block;
+}
+
+.np-title.overflowing .t {
+  animation: marquee var(--marquee-duration, 8s) ease-in-out 1.2s 2 alternate;
+}
+
+#dock:hover .page.active .np-title.overflowing .t { animation-iteration-count: infinite; }
+
+@keyframes marquee {
+  0%, 15% { transform: translateX(0); }
+  85%, 100% { transform: translateX(var(--shift)); }
+}
+
+.np-artist {
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.25;
+  opacity: 0.72;
+  text-overflow: ellipsis;
+}
+
+/* Track change while using the controls: lines slide up and blur out, new ones spring in. */
+#np.swap-out .line {
+  opacity: 0;
+  transform: translateY(-8px);
+  filter: blur(3px);
+  transition: opacity 220ms ease, transform 220ms ease, filter 220ms ease;
+}
+
+#np.swap-in .line {
+  animation: line-in 700ms var(--spring) both;
+}
+
+#np.swap-in .np-artist { animation-delay: 70ms; }
+
+@keyframes line-in {
+  from { opacity: 0; transform: translateY(12px); filter: blur(4px); }
+  to { opacity: 1; transform: none; filter: blur(0); }
+}
+
+/* ---------- Media controls (shown on hover) ---------- */
+
+.controls {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: -14px; /* the music page ends 14px short of the dock's edge; the backdrop has to reach it */
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 24px 0 34px; /* the extra 14px keeps the buttons where they were */
+  border-radius: 0 10px 10px 0;
+  /* Fades the text out underneath so the buttons stay legible. */
+  background: linear-gradient(90deg, transparent, rgba(0, 0, 0, 0.45) 42%);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 250ms ease;
+}
+
+#dock:hover .page.active .controls {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* The title and artist fade out before the buttons begin, so nothing shows through behind them. The
+   buttons take up the last ~102px of the page, so this is measured from the right edge rather than
+   as a percentage of the text, which stopped lining up when the page's right-hand spacing grew. */
+#dock:hover .page.active #np {
+  -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 134px), transparent calc(100% - 108px));
+  mask-image: linear-gradient(90deg, #000 calc(100% - 134px), transparent calc(100% - 108px));
+}
+
+#dock.reveal .controls { opacity: 0 !important; pointer-events: none !important; }
+
+.ctl {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+  outline: none;
+  opacity: 0;
+  transform: translateX(14px) scale(0.6);
+  transition: transform 450ms var(--spring), opacity 250ms ease, background-color 150ms ease;
+}
+
+.ctl.play {
+  width: 32px;
+  height: 32px;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.ctl svg {
+  width: 15px;
+  height: 15px;
+  fill: #fff;
+}
+
+.ctl.play svg { width: 17px; height: 17px; }
+
+#dock:hover .page.active .ctl {
+  opacity: 1;
+  transform: none;
+}
+
+/* Stagger so the buttons pop in one after another. */
+#dock:hover .ctl:nth-child(3) { transition-delay: 0ms; }
+#dock:hover .ctl:nth-child(2) { transition-delay: 40ms; }
+#dock:hover .ctl:nth-child(1) { transition-delay: 80ms; }
+
+.ctl:hover { background: rgba(255, 255, 255, 0.24); }
+
+#dock:hover .ctl:active {
+  transform: scale(0.86);
+  transition: transform 100ms ease;
+}
+
+/* Play/pause icons swap with a little pop. */
+.ctl.play svg {
+  grid-area: 1 / 1;
+  transition: transform 350ms var(--spring), opacity 200ms ease;
+}
+
+#dock:not(.paused) .ctl.play .i-play,
+#dock.paused .ctl.play .i-pause {
+  opacity: 0;
+  transform: scale(0.3) rotate(-60deg);
+}
+
+/* ---------- Bluetooth device chips ---------- */
+
+.chip {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+/* Letters of the notice's device name spring in one after another. */
+.notice-name .ch {
+  display: inline-block;
+  white-space: pre;
+  opacity: 0;
+  animation: letter-in 650ms var(--spring) both;
+  animation-delay: calc(var(--i) * 35ms);
+}
+
+@keyframes letter-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.85); filter: blur(4px); }
+  to { opacity: 1; transform: none; filter: blur(0); }
+}
+
+.chip-body {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  opacity: 0;
+}
+
+.chip.shown .chip-body {
+  opacity: 1;
+  transition: opacity 400ms ease;
+}
+
+.chip-name {
+  max-width: 150px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 13px;
+  font-weight: 500;
+  opacity: 0;
+  transform: translateX(-6px);
+}
+
+.chip.shown .chip-name {
+  opacity: 0.92;
+  transform: none;
+  transition: opacity 450ms ease 200ms, transform 650ms var(--spring) 200ms;
+}
+
+/* Battery circle: the outline is the whole battery, the water height inside is the charge. */
+.gauge {
+  --level: 0;
+  --tint: rgba(255, 255, 255, 0.32);
+  position: relative;
+  width: 32px;
+  height: 32px;
+  box-sizing: border-box;
+  flex: none;
+  border: 1.5px solid rgba(255, 255, 255, 0.85);
+  border-radius: 50%;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  transform: scale(0.55);
+}
+
+.chip.shown .gauge {
+  transform: none;
+  transition: transform 650ms var(--spring);
+}
+
+.gauge.low { --tint: rgba(255, 107, 107, 0.55); }
+
+.water {
+  position: absolute;
+  inset: 0;
+  background: var(--tint);
+  transform: translateY(calc((1 - var(--level)) * 100%));
+  transition: transform 900ms var(--spring-soft), background-color 300ms ease;
+}
+
+.gauge-label {
+  position: relative;
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* Devices that don't report a battery get a Bluetooth glyph instead of a level. */
+.gauge-glyph {
+  position: relative;
+  display: none;
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: #fff;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.gauge.unknown .water,
+.gauge.unknown .gauge-label { display: none; }
+.gauge.unknown .gauge-glyph { display: block; }
+
+/* ---------- File shelf ---------- */
+
+#page-files {
+  left: 8px;
+  --pad-right: 14px;
+  width: 228px;
+}
+
+/* One layer at a time: the item, its options, or the "drop it here" target. */
+.fl-layer {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(10px) scale(0.97);
+  filter: blur(3px);
+  transition: opacity 200ms ease, transform 200ms ease, filter 200ms ease, visibility 0s linear 200ms;
+}
+
+#page-files[data-mode='view'] .fl-view,
+#page-files[data-mode='menu'] .fl-menu,
+#page-files[data-mode='drop'] .fl-drop {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: none;
+  filter: none;
+  transition: opacity 250ms ease 60ms, transform 650ms var(--spring) 60ms, filter 300ms ease 60ms;
+}
+
+.fl-thumb {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.12) center / cover no-repeat;
+  cursor: grab;
+}
+
+.fl-thumb.pop { animation: cover-in 650ms var(--spring) both; }
+
+.fl-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.fl-name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.fl-meta {
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.25;
+  opacity: 0.7;
+  transition: color 200ms ease, opacity 200ms ease;
+}
+
+.fl-meta.ok { color: #7ee2a8; opacity: 1; }
+
+.fl-btn {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+  outline: none;
+  transition: background-color 150ms ease, transform 250ms var(--spring);
+}
+
+.fl-btn[hidden] { display: none; }
+.fl-btn:hover { background: rgba(255, 255, 255, 0.2); }
+.fl-btn:active { transform: scale(0.86); }
+
+.fl-btn svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: #fff;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.fl-nav { width: 20px; height: 20px; margin-right: -4px; }
+.fl-nav svg { width: 12px; height: 12px; }
+.fl-more svg { fill: #fff; stroke: none; }
+
+/* The options row fills the dock, since a popup wouldn't fit. */
+.fl-menu { gap: 4px; }
+
+.fl-pill {
+  flex: 1;
+  height: 28px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  font: 600 11px 'Segoe UI Variable Text', 'Segoe UI', sans-serif;
+  white-space: nowrap;
+  cursor: pointer;
+  outline: none;
+  transition: background-color 150ms ease, transform 250ms var(--spring);
+}
+
+.fl-pill:hover { background: rgba(255, 255, 255, 0.26); }
+.fl-pill:active { transform: scale(0.94); }
+.fl-pill.danger { color: #ff9a9a; }
+.fl-pill.danger:hover { background: rgba(255, 107, 107, 0.3); }
+
+.fl-drop-box {
+  width: 100%;
+  height: 32px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1.5px dashed rgba(255, 255, 255, 0.5);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.fl-drop-box svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: #fff;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ---------- Disconnect notice ---------- */
+
+/* The device name animates in letter by letter; "Connected" / "Disconnected" then springs up from
+   below it, and both fade out together. */
+#page-notice { width: max-content; }
+
+#notice {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+  white-space: nowrap;
+  transition: opacity 380ms ease, transform 380ms ease, filter 380ms ease;
+}
+
+#notice.out {
+  opacity: 0;
+  transform: translateY(-4px);
+  filter: blur(3px);
+}
+
+.notice-name {
+  max-width: 190px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.notice-status {
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: #ff8a8a; /* disconnected */
+  opacity: 0;
+  transform: translateY(18px) scale(0.9);
+  transform-origin: left center;
+  filter: blur(3px);
+  transition: opacity 350ms ease, transform 750ms var(--spring), filter 450ms ease;
+}
+
+.notice-status[data-kind='ok'] { color: #7ee2a8; } /* connected */
+
+.notice-status.in {
+  opacity: 1;
+  transform: none;
+  filter: none;
+}
