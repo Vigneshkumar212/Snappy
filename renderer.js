@@ -115,9 +115,47 @@ function reflow(mutate) {
 
 // Top to bottom. "home" is the resting tab (the name and tagline); the three in the middle come and go
 // with their content; "timer" and "system" are always there, at the bottom, so they're out of the way
-// until you scroll down to them. Things that happen (a device connecting, music starting) show their
-// tab for a moment, then the dock goes back to the tab you were last on.
+// until you scroll down to them. Things that happen (a device connecting, a drop) show their tab for
+// a moment, then the dock goes back to where it was resting, but only if they outrank what's on
+// screen (see PRIORITY below). Where it rests: the tab you scrolled to, or if you haven't chosen one,
+// Music while something is playing (it outranks Home), otherwise Home.
 const TAB_ORDER = ['home', 'media', 'bluetooth', 'files', 'timer', 'system'];
+
+// How much each tab matters. An event (a device connecting or disconnecting, a track starting, a drop)
+// may take over the dock only if its tab OUTRANKS the one on screen; otherwise it happens quietly in
+// the background (the device joins the Devices tab, the track is there when you scroll to Music).
+// Things you do yourself always work: scrolling, and dragging a file over the dock. A ringing timer
+// alarm beats everything.
+//   0 Home (resting)  |  1 Timer, System, Devices  |  2 Music, Files
+const PRIORITY = { home: 0, system: 1, timer: 1, bluetooth: 1, files: 2, media: 2 };
+const INTERRUPT_ON_EQUAL = false; // true: an event as important as what's showing may take over too
+
+let noticeTab = 'bluetooth'; // the tab whose event the notice page is announcing
+
+// Where the dock sits when you haven't picked a tab and nothing is happening: the highest-priority
+// thing that's ongoing. Music while something is playing (2), else the Timer while one is running (1),
+// else Home (0). Momentary things (a device connecting, a drop) show themselves and then return to
+// this. (A tab you scrolled to yourself beats it: see selectedTab.)
+function restingTab() {
+  if (mediaPlaying) return 'media';
+  if (timerRunning) return 'timer';
+  return 'home';
+}
+
+// What's on screen, for ranking purposes. A notice counts as the tab it's announcing.
+function shownTab() {
+  return activePage === 'notice' ? noticeTab : activePage || 'home';
+}
+
+// Can an event for `tab` take over the dock right now?
+function canInterrupt(tab) {
+  if (alarmActive) return false;        // nothing outranks a ringing alarm
+  const shown = shownTab();
+  if (tab === shown) return true;       // the same tab: it just refreshes
+  const rank = PRIORITY[tab];
+  const current = PRIORITY[shown] ?? 0;
+  return INTERRUPT_ON_EQUAL ? rank >= current : rank > current;
+}
 const WHEEL_STEP = 50;          // scroll distance that counts as one swipe
 const WHEEL_COOLDOWN_MS = 550;  // ignore the tail of a trackpad swipe after switching
 const DOTS_SHOW_MS = 1600;
@@ -172,21 +210,23 @@ function setPage(name, { manual = false, dir } = {}) {
   renderTabs();
 }
 
-// Decides what the dock shows: the shelf while something is being dragged over, then a notice,
-// then a tab that was asked to show for a while, then the tab you chose, then the first tab
-// that has something.
+// Decides what the dock shows. In order: a ringing alarm; the shelf while something is dragged over
+// it (so it can be dropped, whatever tab you were on); then a notice or a tab that was asked to show
+// for a while, whichever is more important; then the tab you chose; then the resting tab (Music while
+// something plays, otherwise Home).
 function choosePage() {
-  if (alarmActive) return setPage('alarm'); // a ringing timer beats everything until it's stopped
-  if (dragActive) return setPage('files'); // so it can be dropped, whichever tab you were on
-  if (noticeActive) return setPage('notice'); // the other pages come back when it ends
+  if (alarmActive) return setPage('alarm');
+  if (dragActive) return setPage('files');
 
   const tabs = availableTabs();
-  let name;
-  if (Date.now() < holdUntil && tabs.includes(holdTab)) name = holdTab;
-  else if (tabs.includes(selectedTab)) name = selectedTab;
-  else name = 'home'; // nothing chosen (or the chosen tab has gone): the resting tab
+  const holdLive = Date.now() < holdUntil && tabs.includes(holdTab);
+  const holdRank = holdLive ? PRIORITY[holdTab] : -1;
 
-  setPage(name);
+  // A notice shows unless something more important has taken the dock in the meantime.
+  if (noticeActive && PRIORITY[noticeTab] >= holdRank) return setPage('notice');
+  if (holdLive) return setPage(holdTab);
+
+  setPage(tabs.includes(selectedTab) ? selectedTab : restingTab());
 }
 
 function setAlarmActive(active) {
@@ -194,8 +234,9 @@ function setAlarmActive(active) {
   choosePage();
 }
 
-function setNoticeActive(active) {
+function setNoticeActive(active, tab = 'bluetooth') {
   noticeActive = active;
+  if (active) noticeTab = tab;
   choosePage();
 }
 
@@ -221,21 +262,25 @@ function setDragActive(active) {
 
 function setTimerRunning(running) {
   timerRunning = running;
-  renderTabs();
+  choosePage(); // starting or stopping a timer changes where the dock rests (and redraws the dots)
 }
 
 // Show a tab for at least `ms` (the Bluetooth tab after a connect, so the battery gets seen; the
-// shelf after a drop), then go back to the tab you were on.
+// shelf after a drop; Music when a track starts), then go back to the tab you were on. Does nothing
+// (and returns false) if the tab doesn't outrank what's on screen.
 function showTabFor(name, ms) {
+  if (!canInterrupt(name)) return false;
+
   holdUntil = holdTab === name ? Math.max(holdUntil, Date.now() + ms) : Date.now() + ms;
   holdTab = name;
   clearTimeout(holdTimer);
   holdTimer = setTimeout(choosePage, holdUntil - Date.now() + 20);
   choosePage();
+  return true;
 }
 
 function showBluetoothFor(ms) {
-  showTabFor('bluetooth', ms);
+  return showTabFor('bluetooth', ms);
 }
 
 // ---------- scrolling between tabs ----------
@@ -256,12 +301,16 @@ function nudge(delta) {
 }
 
 function stepTab(delta) {
-  if (noticeActive || alarmActive) return;
+  if (activePage === 'notice' || alarmActive) return; // wait out a notice; an alarm needs Stop
 
   const tabs = availableTabs();
   const index = tabs.indexOf(activePage);
   const next = tabs[index + delta];
   if (index < 0 || !next) return nudge(delta);
+
+  // You've taken over. A notice that something more important had pushed aside is still armed
+  // underneath, and would pop back over your tab on the next update, so end it now.
+  if (noticeActive) cancelNotice();
 
   selectedTab = next;
   holdUntil = 0; // you've chosen; don't snap back to a pending hold

@@ -5,7 +5,7 @@
      visible against a dark taskbar without competing with the music colours. */
   --dock-bg:/* linear-gradient(105deg, #2b2e3b, #1e2029);*//* https://grabient.com/_gGThF4fIlgTYhEAhFtgBigBfgBigC1gGWgPL */linear-gradient(
   45deg,
-  #1e3368 ,
+  #681e4a ,
   #0f1327
 );/* transparent room around the dock for its shadow (SHADOW_PAD in main.js) */
   --dock-x: 16px;  /* horizontal padding inside the dock (bluetooth page) */
@@ -1002,5 +1002,8 @@ body {
   transition: opacity 450ms ease;
 }
 
-/* While the cover shows on its own, the dock has no background at all. */
-#dock.reveal::before { opacity: 0; }
+/* While the cover shows on its own, the dock has no background at all. And on the Music tab the cover's
+   own colour is the background: letting the default colour fade in underneath it showed both stacked
+   for a moment (the slate behind the colour wiping in). */
+#dock.reveal::before,
+#dock[data-page='media']::before { opacity: 0; }

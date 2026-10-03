@@ -307,7 +307,7 @@ function applyMedia(media) {
       swapText(media, true); // using the controls: keep the text and animate the swap
     } else {
       setText(media); // the text is tucked behind the cover for the reveal anyway
-      if (activePage !== 'media') showTabFor('media', MEDIA_HOLD_MS); // a new track: show it, then go back
+      showTabFor('media', MEDIA_HOLD_MS); // a new track: show it (or keep showing it, if skipping), then go back
       revealCover();
     }
   }

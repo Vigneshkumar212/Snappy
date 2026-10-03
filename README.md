@@ -30,7 +30,19 @@ Scroll over the dock to flip between tabs. Tiny dots show where you are.
 
 At the very top is **Home**, the resting state: just the name and tagline in a calm slate dock. Music, Devices and Files appear when they have something to show, and Timer and System are always there at the bottom.
 
-Things that happen **borrow the dock, then give it back.** A device connecting or a new track starting shows itself for a few seconds, then Snappy returns to whichever tab you were on. Scroll to a tab yourself and it stays.
+**The dock rests on whatever is ongoing.** Nothing is selected by default, so it rests on Music whenever something is playing, or on the Timer while one is running (music wins if both), and goes back to Home when neither is.
+
+Other things that happen **borrow the dock, then give it back.** A device connecting or a file drop shows itself for a few seconds, then Snappy returns to where it was resting. Scroll to a tab yourself and it stays on your choice; a new track will still show itself for a moment and then return to it.
+
+Every tab has a **priority**, and an event only takes over the dock if it outranks what's already on screen. Anything that can't just happens quietly: the device joins the Devices tab, the track is waiting in Music.
+
+| Priority | Tabs |
+| --- | --- |
+| 0 | Home |
+| 1 | Timer, System, Devices |
+| 2 | Music, Files |
+
+So from Home, anything can show itself; while you're on Timer, a track starting can interrupt but a device connecting won't; and while music is up, a device connecting waits its turn. Dragging a file over the dock always works, and a ringing timer alarm outranks everything.
 
 Every tab shares the same muted dock colour, except Music, which takes its colours from the cover.
 

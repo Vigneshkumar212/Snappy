@@ -77,11 +77,12 @@ function showChip(chip) {
 }
 
 // Chips for devices that just connected stay hidden until their notice is over, then show together
-// with the battery level, and the Bluetooth page stays up long enough to see them.
-function revealPendingChips() {
+// with the battery level, and the Bluetooth page stays up long enough to see them. (If something more
+// important took the dock meanwhile, the hold is refused, and the chips just appear quietly.)
+function revealPendingChips({ hold = true } = {}) {
   if (!pendingChips.size) return;
 
-  showBluetoothFor(CHIP_HOLD_MS);
+  if (hold) showBluetoothFor(CHIP_HOLD_MS);
   pendingChips.forEach(showChip);
   pendingChips.clear();
 }
@@ -95,6 +96,13 @@ function connect(device, initial) {
     // Already connected when Snappy started: just appear, no announcement.
     setHasDevices(true);
     layoutDock();
+    showChip(chip);
+    return;
+  }
+
+  // Only announce it if devices outrank what's on screen; otherwise it quietly joins the Devices tab.
+  if (!canInterrupt('bluetooth')) {
+    setHasDevices(true);
     showChip(chip);
     return;
   }
@@ -127,7 +135,7 @@ function showNotice(name, status, kind) {
   noticeStatus.dataset.kind = kind;
   noticeEl.classList.remove('out');
   noticeStatus.classList.remove('in');
-  setNoticeActive(true);
+  setNoticeActive(true, 'bluetooth');
 
   const fadeAt = NOTICE_STATUS_DELAY_MS + NOTICE_SETTLE_MS + NOTICE_HOLD_MS;
   noticeTimers = [
@@ -140,11 +148,26 @@ function showNotice(name, status, kind) {
   ];
 }
 
+// Ends a notice early (you took over the dock yourself): its chips appear quietly and it won't come back.
+function cancelNotice() {
+  noticeTimers.forEach(clearTimeout);
+  noticeTimers = [];
+  revealPendingChips({ hold: false });
+  setNoticeActive(false);
+}
+
 function disconnect(name, chip) {
   chips.delete(name);
   pendingChips.delete(chip);
   chip.timers.forEach(clearTimeout);
   cancelAnimationFrame(chip.tween);
+
+  // Same rule as connecting: no announcement unless devices outrank what's on screen.
+  if (!canInterrupt('bluetooth')) {
+    reflow(() => chip.el.remove());
+    setHasDevices(chips.size > 0);
+    return;
+  }
 
   // The notice takes over the dock first; the chip is removed behind it, and the remaining chips
   // slide into the gap so they're already in place when the dock comes back to them.
