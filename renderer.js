@@ -113,11 +113,11 @@ function reflow(mutate) {
 
 // ---------- tabs & page switching ----------
 
-// Top to bottom. "home" is the empty tab at the top (the dock shows nothing); the three in the middle
-// come and go with their content; "timer" and "system" are always there, at the bottom, so they're out
-// of the way until you scroll down to them.
+// Top to bottom. "home" is the resting tab (the name and tagline); the three in the middle come and go
+// with their content; "timer" and "system" are always there, at the bottom, so they're out of the way
+// until you scroll down to them. Things that happen (a device connecting, music starting) show their
+// tab for a moment, then the dock goes back to the tab you were last on.
 const TAB_ORDER = ['home', 'media', 'bluetooth', 'files', 'timer', 'system'];
-const CONTENT_TABS = ['media', 'bluetooth', 'files']; // the ones that appear by themselves
 const WHEEL_STEP = 50;          // scroll distance that counts as one swipe
 const WHEEL_COOLDOWN_MS = 550;  // ignore the tail of a trackpad swipe after switching
 const DOTS_SHOW_MS = 1600;
@@ -130,7 +130,8 @@ function availableTabs() {
   return TAB_ORDER.filter((name) => present[name]);
 }
 
-// Little dots show which tab you're on. They appear on hover, and briefly after a switch.
+// Little dots show which tab you're on. They appear on hover, and briefly after you switch tabs
+// yourself (not when the dock swaps tabs on its own).
 function renderTabs() {
   const tabs = availableTabs();
   tabsEl.hidden = tabs.length < 2;
@@ -165,7 +166,7 @@ function setPage(name, { manual = false, dir } = {}) {
     dock.style.setProperty('--dir', dir);
     for (const [key, el] of Object.entries(pages)) el.classList.toggle('active', key === name);
     window.dispatchEvent(new CustomEvent('pagechange', { detail: { name, manual } }));
-    if (name !== 'notice' && name !== 'alarm') flashTabs();
+    if (manual) flashTabs(); // only when you switched; automatic swaps (notices, holds, drops) stay quiet
   }
   layoutDock({ bounce: changed });
   renderTabs();
@@ -183,7 +184,7 @@ function choosePage() {
   let name;
   if (Date.now() < holdUntil && tabs.includes(holdTab)) name = holdTab;
   else if (tabs.includes(selectedTab)) name = selectedTab;
-  else name = defaultTab(tabs);
+  else name = 'home'; // nothing chosen (or the chosen tab has gone): the resting tab
 
   setPage(name);
 }
@@ -216,18 +217,6 @@ function setFileCount(count) {
 function setDragActive(active) {
   dragActive = active;
   choosePage();
-}
-
-// The tab shown when you haven't picked one: the first with live content, or the empty home tab.
-function defaultTab(tabs) {
-  return CONTENT_TABS.find((name) => tabs.includes(name)) || 'home';
-}
-
-// Bring a tab forward (the caller lays the page out afterwards), unless you're parked on one of the
-// always-there tabs: music starting shouldn't yank you off your timer, or off the empty tab you chose.
-function preferTab(name) {
-  if (selectedTab && !CONTENT_TABS.includes(selectedTab)) return;
-  selectedTab = name;
 }
 
 function setTimerRunning(running) {

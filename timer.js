@@ -108,7 +108,7 @@ function resetTimer() {
   renderTimer({ force: true });
 }
 
-function setMode(mode) {
+function switchTimerMode(mode) {
   if (mode === timerMode) return;
   timerMode = mode;
   phase = mode === 'timer' ? 'timer' : 'focus';
@@ -302,8 +302,8 @@ const timerActions = {
   menu: () => setTimerPageMode('menu'),
   close: () => setTimerPageMode('view'),
   reset: () => { resetTimer(); setTimerPageMode('view'); },
-  'mode-pomodoro': () => { setMode('pomodoro'); setTimerPageMode('view'); },
-  'mode-timer': () => { setMode('timer'); setTimerPageMode('view'); },
+  'mode-pomodoro': () => { switchTimerMode('pomodoro'); setTimerPageMode('view'); },
+  'mode-timer': () => { switchTimerMode('timer'); setTimerPageMode('view'); },
 };
 
 timerPage.addEventListener('click', (event) => {

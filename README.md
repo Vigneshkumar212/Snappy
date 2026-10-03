@@ -28,7 +28,11 @@ No window to manage. No icon to click. It's just there when you glance down.
 
 Scroll over the dock to flip between tabs. Tiny dots show where you are.
 
-Music, Devices and Files appear on their own when they have something to show. At the very top is an **empty tab** that shows nothing at all, a clean taskbar whenever you want one. At the bottom, **Timer** and **System** are always there but never pushy: music starting won't pull you off your timer.
+At the very top is **Home**, the resting state: just the name and tagline in a calm slate dock. Music, Devices and Files appear when they have something to show, and Timer and System are always there at the bottom.
+
+Things that happen **borrow the dock, then give it back.** A device connecting or a new track starting shows itself for a few seconds, then Snappy returns to whichever tab you were on. Scroll to a tab yourself and it stays.
+
+Every tab shares the same muted dock colour, except Music, which takes its colours from the cover.
 
 ### 🎵 Music
 Whatever's playing, front and centre. Spotify, a browser tab, anything that shows up in Windows' media controls.

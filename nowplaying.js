@@ -21,7 +21,8 @@ const COVER_TEXT_GAP = 10;
 const TEXT_END_GAP = 12;
 const FALLBACK_ACCENT = '#d9d9de';
 const HIDE_DELAY = 2500; // players report "nothing" briefly between tracks
-const COVER_REVEAL_MS = 1500; // how long the cover shows on its own before the text slides out
+const COVER_REVEAL_MS = 900;  // how long the cover shows on its own before the text slides out
+const MEDIA_HOLD_MS = 5500;   // how long the music tab stays up when a track starts, before going back
 
 let current = null;     // last media payload
 let lastKey = null;     // key of the last track shown, kept across hide/show
@@ -306,6 +307,7 @@ function applyMedia(media) {
       swapText(media, true); // using the controls: keep the text and animate the swap
     } else {
       setText(media); // the text is tucked behind the cover for the reveal anyway
+      if (activePage !== 'media') showTabFor('media', MEDIA_HOLD_MS); // a new track: show it, then go back
       revealCover();
     }
   }
@@ -315,8 +317,10 @@ function applyMedia(media) {
   if (firstShow) {
     coverReady.then(() => {
       if (current !== media) return;
-      preferTab('media'); // music coming on takes the dock, even if you were on another tab
       setMediaPlaying(true);
+      // Show the music for a moment, then back to the tab you were on. (Not for the same track returning
+      // after a pause: that isn't news.)
+      if (!suppressNextReveal) showTabFor('media', MEDIA_HOLD_MS);
       suppressNextReveal = false; // only ever applies to the page change triggered just above
     });
   } else {

@@ -1,6 +1,13 @@
 :root {
   --text: #f4f4f5;
-  --pad: 4px;      /* transparent room around the dock for its shadow (SHADOW_PAD in main.js) */
+  --pad: 4px;      /* transparent room around the dock (SHADOW_PAD in main.js); the dock is inset by this much in the window */
+  /* The dock's colour on every tab except Music, which takes its colours from the cover. A muted slate:
+     visible against a dark taskbar without competing with the music colours. */
+  --dock-bg:/* linear-gradient(105deg, #2b2e3b, #1e2029);*//* https://grabient.com/_gGThF4fIlgTYhEAhFtgBigBfgBigC1gGWgPL */linear-gradient(
+  45deg,
+  #1e3368 ,
+  #0f1327
+);/* transparent room around the dock for its shadow (SHADOW_PAD in main.js) */
   --dock-x: 16px;  /* horizontal padding inside the dock (bluetooth page) */
   --media-pad: 4px; /* the cover sits this far from the dock's edges */
 
@@ -243,7 +250,7 @@ body {
   gap: 1px;
   width: 100%;
   padding-bottom: 3px; /* clear of the progress line */
-  transition: opacity 700ms ease 150ms, transform 850ms var(--spring) 150ms, filter 700ms ease 150ms;
+  transition: opacity 600ms ease, transform 800ms var(--spring), filter 600ms ease;
 }
 
 #dock.paused #np { opacity: 0.7; }
@@ -465,8 +472,8 @@ body {
   --level: 0;
   --tint: rgba(255, 255, 255, 0.32);
   position: relative;
-  width: 32px;
-  height: 32px;
+  width: 27px;
+  height: 27px;
   box-sizing: border-box;
   flex: none;
   border: 1.5px solid rgba(255, 255, 255, 0.85);
@@ -494,7 +501,7 @@ body {
 
 .gauge-label {
   position: relative;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.01em;
@@ -540,11 +547,15 @@ body {
   transition: opacity 200ms ease, transform 200ms ease, filter 200ms ease, visibility 0s linear 200ms;
 }
 
-#page-files[data-mode='view'] .fl-view,
-#page-files[data-mode='menu'] .fl-menu,
-#page-files[data-mode='drop'] .fl-drop,
-#page-timer[data-mode='view'] .tm-view,
-#page-timer[data-mode='menu'] .tm-menu {
+/* Only while the page itself is active (.active). A layer sets its own visibility and pointer-events,
+   which would otherwise override its hidden parent page: an inactive page's layer would be invisible
+   (the page is transparent) but still catch clicks, sitting on top of the pages before it. That's what
+   made the Music and Files buttons stop responding once the Timer page existed. */
+#page-files.active[data-mode='view'] .fl-view,
+#page-files.active[data-mode='menu'] .fl-menu,
+#page-files.active[data-mode='drop'] .fl-drop,
+#page-timer.active[data-mode='view'] .tm-view,
+#page-timer.active[data-mode='menu'] .tm-menu {
   opacity: 1;
   visibility: visible;
   pointer-events: auto;
@@ -729,13 +740,35 @@ body {
 /* Nothing to see: the dock shrinks to a small invisible hot area with faint dots, so there's still
    somewhere to scroll from. */
 #page-home {
-  left: 0;
-  --pad-right: 0px;
-  width: 28px;
+  left: 9px;
+  --pad-right: 9px;
+  width: 132px; /* 9 + 132 + 9: the Home dock is 150px wide */
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 1px;
 }
 
-#dock[data-page='home'] #art { opacity: 0 !important; } /* hide the music background too */
-#dock[data-page='home'] #tabs { opacity: 0.5; }
+.home-name {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0.02em;
+}
+
+.home-tag {
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 8.5px; /* the full tagline is 129px at this size; it needs to fit in the 132px page */
+  font-weight: 500;
+  line-height: 1.3;
+  opacity: 0.62;
+}
+
+/* The cover's colours belong to the Music tab only; every other tab keeps the fixed dock colour. */
+#dock:not([data-page='media']) #art { opacity: 0 !important; }
 
 /* ---------- Timer ---------- */
 
@@ -749,7 +782,7 @@ body {
 .tm-gauge,
 .sys-gauge { transform: none; }
 
-.tm-gauge { width: 34px; height: 34px; }
+.tm-gauge { width: 29px; height: 29px; }
 .tm-gauge.rest { --tint: rgba(126, 226, 168, 0.42); } /* breaks are green */
 
 .tm-text {
@@ -828,8 +861,8 @@ body {
   gap: 6px;
 }
 
-.sys-gauge { width: 30px; height: 30px; }
-.sys-gauge .gauge-label { font-size: 10px; }
+.sys-gauge { width: 25px; height: 25px; }
+.sys-gauge .gauge-label { font-size: 9px; }
 .sys-gauge.hot { --tint: rgba(255, 107, 107, 0.55); } /* the water turns red when it's running hot */
 
 /* The water moves a little slower than the 2s sampling, so it flows rather than jumps. */
@@ -957,3 +990,17 @@ body {
 
 .alarm-stop:hover { background: #ffe9e2; }
 .alarm-stop:active { transform: scale(0.92); }
+
+/* ---------- Dock colour ---------- */
+
+#dock::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--dock-bg); /* no border or edge line: it should sit flush, like the rest of Windows */
+  transition: opacity 450ms ease;
+}
+
+/* While the cover shows on its own, the dock has no background at all. */
+#dock.reveal::before { opacity: 0; }

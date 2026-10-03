@@ -24,7 +24,7 @@ let flashTimer;
 
 // ---------- showing an item ----------
 
-function setMode(next) {
+function setShelfMode(next) {
   mode = next;
   filesPage.dataset.mode = next;
 }
@@ -87,11 +87,11 @@ const actions = {
   },
 
   menu() {
-    setMode('menu');
+    setShelfMode('menu');
   },
 
   close() {
-    setMode('view');
+    setShelfMode('view');
   },
 
   // Only takes it off the shelf. A real file on disk is never touched.
@@ -99,7 +99,7 @@ const actions = {
     const item = items[index];
     await window.snappy.files.remove(item.id);
     items.splice(index, 1);
-    setMode('view');
+    setShelfMode('view');
 
     if (items.length) {
       index = Math.min(index, items.length - 1);
@@ -110,14 +110,14 @@ const actions = {
 
   async 'copy-path'() {
     await window.snappy.files.copyPath(items[index].id);
-    setMode('view');
+    setShelfMode('view');
     flash('Path copied');
   },
 
   async copy() {
     const item = items[index];
     const ok = await window.snappy.files.copy(item.id);
-    setMode('view');
+    setShelfMode('view');
     flash(ok ? (item.kind === 'text' ? 'Text copied' : 'File copied') : "Couldn't copy");
   },
 };
@@ -140,7 +140,7 @@ thumbEl.addEventListener('dragstart', (event) => {
 
 // Leave the options open behind your back and they'd still be there when you swipe back.
 window.addEventListener('pagechange', (event) => {
-  if (event.detail.name !== 'files' && mode === 'menu') setMode('view');
+  if (event.detail.name !== 'files' && mode === 'menu') setShelfMode('view');
 });
 
 // ---------- dropping things on the dock ----------
@@ -152,7 +152,7 @@ function droppable(dataTransfer) {
 function beginDrag() {
   if (dragging) return;
   dragging = true;
-  setMode('drop');
+  setShelfMode('drop');
   setDragActive(true); // jumps to this tab, whichever one you were on
 }
 
@@ -161,7 +161,7 @@ function endDrag() {
   if (!dragging) return;
 
   dragging = false;
-  if (mode === 'drop') setMode('view');
+  if (mode === 'drop') setShelfMode('view');
   setDragActive(false); // back to where you were
 }
 
@@ -235,7 +235,7 @@ function finishDrop(added) {
     index = Math.max(0, items.findIndex((item) => item.id === added[0].id));
   }
 
-  setMode('view');
+  setShelfMode('view');
   render({ pop: true });
   if (!fresh.length) flash('Already on the shelf');
 
