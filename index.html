@@ -92,6 +92,73 @@
       </div>
     </section>
 
+    <!-- The empty tab at the top of the list: the dock shows nothing but its dots. -->
+    <section id="page-home" class="page" aria-hidden="true"></section>
+
+    <!-- Timer tab: a Pomodoro (focus/break cycles) or a plain countdown. Always available. -->
+    <section id="page-timer" class="page" data-mode="view">
+      <div class="fl-layer tm-view">
+        <div class="gauge tm-gauge"><div class="water"></div><span class="gauge-label">25</span></div>
+        <div class="tm-text">
+          <div class="tm-time">25:00</div>
+          <div class="tm-label">Focus 1/4</div>
+        </div>
+        <button class="fl-btn tm-step" data-act="minus" aria-label="Shorter">
+          <svg viewBox="0 0 24 24"><path d="M6 12h12" /></svg>
+        </button>
+        <button class="fl-btn tm-step" data-act="plus" aria-label="Longer">
+          <svg viewBox="0 0 24 24"><path d="M12 6v12M6 12h12" /></svg>
+        </button>
+        <button class="fl-btn tm-skip" data-act="skip" aria-label="Skip to the next phase">
+          <svg viewBox="0 0 24 24" class="solid"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" /></svg>
+        </button>
+        <button class="fl-btn tm-play" data-act="toggle" aria-label="Start / pause">
+          <svg class="i-play solid" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+          <svg class="i-pause solid" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z" /></svg>
+        </button>
+        <button class="fl-btn fl-more" data-act="menu" aria-label="Options">
+          <svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="19" cy="12" r="2" /></svg>
+        </button>
+      </div>
+
+      <div class="fl-layer tm-menu">
+        <button class="fl-pill" data-act="mode-pomodoro">Pomodoro</button>
+        <button class="fl-pill" data-act="mode-timer">Timer</button>
+        <button class="fl-pill" data-act="reset">Reset</button>
+        <button class="fl-btn" data-act="close" aria-label="Close options">
+          <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></svg>
+        </button>
+      </div>
+    </section>
+
+    <!-- System tab: CPU, memory and network speed. Always available; only sampled while it's showing. -->
+    <section id="page-system" class="page">
+      <div class="sys-cell" data-metric="cpu">
+        <div class="gauge sys-gauge"><div class="water"></div><span class="gauge-label">0</span></div>
+        <span class="sys-name">CPU</span>
+      </div>
+      <div class="sys-cell" data-metric="ram">
+        <div class="gauge sys-gauge"><div class="water"></div><span class="gauge-label">0</span></div>
+        <span class="sys-name">RAM</span>
+      </div>
+      <div class="sys-net">
+        <div class="sys-down">↓ 0 KB/s</div>
+        <div class="sys-up">↑ 0 KB/s</div>
+      </div>
+    </section>
+
+    <!-- The alarm glow: an orange-red background that takes over the dock while the timer is ringing. -->
+    <div id="alarm-glow" aria-hidden="true"></div>
+
+    <!-- The timer's alarm: rings (and shakes) until you press Stop. -->
+    <section id="page-alarm" class="page">
+      <div class="alarm-text">
+        <div class="alarm-title">Focus complete</div>
+        <div class="alarm-status">Time for a break</div>
+      </div>
+      <button class="alarm-stop" data-act="stop-alarm">Stop</button>
+    </section>
+
     <!-- Dots showing which tab you're on; scroll over the dock to switch. -->
     <div id="tabs" aria-hidden="true" hidden></div>
   </div>
@@ -100,5 +167,7 @@
   <script src="bluetooth.js"></script>
   <script src="nowplaying.js"></script>
   <script src="files.js"></script>
+  <script src="timer.js"></script>
+  <script src="system.js"></script>
 </body>
 </html>

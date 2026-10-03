@@ -10,14 +10,20 @@ const pages = {
   bluetooth: document.getElementById('page-bluetooth'),
   files: document.getElementById('page-files'),
   notice: document.getElementById('page-notice'),
+  home: document.getElementById('page-home'),
+  timer: document.getElementById('page-timer'),
+  system: document.getElementById('page-system'),
+  alarm: document.getElementById('page-alarm'),
 };
 
 let activePage = null;
 let mediaPlaying = false;
 let hasDevices = false;
 let fileCount = 0;
+let timerRunning = false;
 let dragActive = false; // something is being dragged over the dock
 let noticeActive = false;
+let alarmActive = false; // the timer is ringing
 let selectedTab = null; // the tab you last scrolled to (or that was last brought forward)
 let holdTab = null;     // a tab that was asked to show for a while (a connect's battery, a fresh drop)
 let holdUntil = 0;
@@ -107,7 +113,11 @@ function reflow(mutate) {
 
 // ---------- tabs & page switching ----------
 
-const TAB_ORDER = ['media', 'bluetooth', 'files'];
+// Top to bottom. "home" is the empty tab at the top (the dock shows nothing); the three in the middle
+// come and go with their content; "timer" and "system" are always there, at the bottom, so they're out
+// of the way until you scroll down to them.
+const TAB_ORDER = ['home', 'media', 'bluetooth', 'files', 'timer', 'system'];
+const CONTENT_TABS = ['media', 'bluetooth', 'files']; // the ones that appear by themselves
 const WHEEL_STEP = 50;          // scroll distance that counts as one swipe
 const WHEEL_COOLDOWN_MS = 550;  // ignore the tail of a trackpad swipe after switching
 const DOTS_SHOW_MS = 1600;
@@ -116,7 +126,7 @@ let dotsTimer;
 
 // A tab exists only while it has something to show.
 function availableTabs() {
-  const present = { media: mediaPlaying, bluetooth: hasDevices, files: fileCount > 0 };
+  const present = { home: true, media: mediaPlaying, bluetooth: hasDevices, files: fileCount > 0, timer: true, system: true };
   return TAB_ORDER.filter((name) => present[name]);
 }
 
@@ -126,7 +136,10 @@ function renderTabs() {
   tabsEl.hidden = tabs.length < 2;
   while (tabsEl.children.length < tabs.length) tabsEl.appendChild(document.createElement('i')).className = 'tab-dot';
   while (tabsEl.children.length > tabs.length) tabsEl.lastChild.remove();
-  [...tabsEl.children].forEach((dot, i) => dot.classList.toggle('active', tabs[i] === activePage));
+  [...tabsEl.children].forEach((dot, i) => {
+    dot.classList.toggle('active', tabs[i] === activePage);
+    dot.classList.toggle('live', tabs[i] === 'timer' && timerRunning);
+  });
 }
 
 function flashTabs() {
@@ -142,7 +155,7 @@ function setPage(name, { manual = false, dir } = {}) {
   const changed = name !== activePage;
   if (changed) {
     if (dir === undefined) {
-      const forwards = name === 'notice' || activePage === 'notice' || activePage === null
+      const forwards = name === 'notice' || activePage === 'notice' || name === 'alarm' || activePage === 'alarm' || activePage === null
         || TAB_ORDER.indexOf(name) >= TAB_ORDER.indexOf(activePage);
       dir = forwards ? 1 : -1;
     }
@@ -152,7 +165,7 @@ function setPage(name, { manual = false, dir } = {}) {
     dock.style.setProperty('--dir', dir);
     for (const [key, el] of Object.entries(pages)) el.classList.toggle('active', key === name);
     window.dispatchEvent(new CustomEvent('pagechange', { detail: { name, manual } }));
-    if (name !== 'notice') flashTabs();
+    if (name !== 'notice' && name !== 'alarm') flashTabs();
   }
   layoutDock({ bounce: changed });
   renderTabs();
@@ -162,6 +175,7 @@ function setPage(name, { manual = false, dir } = {}) {
 // then a tab that was asked to show for a while, then the tab you chose, then the first tab
 // that has something.
 function choosePage() {
+  if (alarmActive) return setPage('alarm'); // a ringing timer beats everything until it's stopped
   if (dragActive) return setPage('files'); // so it can be dropped, whichever tab you were on
   if (noticeActive) return setPage('notice'); // the other pages come back when it ends
 
@@ -169,9 +183,14 @@ function choosePage() {
   let name;
   if (Date.now() < holdUntil && tabs.includes(holdTab)) name = holdTab;
   else if (tabs.includes(selectedTab)) name = selectedTab;
-  else name = tabs[0] || 'bluetooth'; // nothing to show: the (empty) Bluetooth page
+  else name = defaultTab(tabs);
 
   setPage(name);
+}
+
+function setAlarmActive(active) {
+  alarmActive = active;
+  choosePage();
 }
 
 function setNoticeActive(active) {
@@ -199,9 +218,21 @@ function setDragActive(active) {
   choosePage();
 }
 
-// Make a tab the one that's shown (the caller lays the page out afterwards).
+// The tab shown when you haven't picked one: the first with live content, or the empty home tab.
+function defaultTab(tabs) {
+  return CONTENT_TABS.find((name) => tabs.includes(name)) || 'home';
+}
+
+// Bring a tab forward (the caller lays the page out afterwards), unless you're parked on one of the
+// always-there tabs: music starting shouldn't yank you off your timer, or off the empty tab you chose.
 function preferTab(name) {
+  if (selectedTab && !CONTENT_TABS.includes(selectedTab)) return;
   selectedTab = name;
+}
+
+function setTimerRunning(running) {
+  timerRunning = running;
+  renderTabs();
 }
 
 // Show a tab for at least `ms` (the Bluetooth tab after a connect, so the battery gets seen; the
@@ -236,7 +267,7 @@ function nudge(delta) {
 }
 
 function stepTab(delta) {
-  if (noticeActive) return;
+  if (noticeActive || alarmActive) return;
 
   const tabs = availableTabs();
   const index = tabs.indexOf(activePage);

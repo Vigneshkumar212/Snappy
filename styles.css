@@ -78,7 +78,7 @@ body {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 3px;
+  gap: 2px;
   pointer-events: none;
   opacity: 0;
   transition: opacity 250ms ease;
@@ -99,6 +99,9 @@ body {
   height: 10px;
   background: rgba(255, 255, 255, 0.9);
 }
+
+/* A timer is running: its dot stays green, so you know even from another tab. */
+.tab-dot.live { background: #7ee2a8; }
 
 /* The music dock is 250px wide. While the cover is shown on its own the dock shrinks to hug it. */
 #page-media {
@@ -539,7 +542,9 @@ body {
 
 #page-files[data-mode='view'] .fl-view,
 #page-files[data-mode='menu'] .fl-menu,
-#page-files[data-mode='drop'] .fl-drop {
+#page-files[data-mode='drop'] .fl-drop,
+#page-timer[data-mode='view'] .tm-view,
+#page-timer[data-mode='menu'] .tm-menu {
   opacity: 1;
   visibility: visible;
   pointer-events: auto;
@@ -718,3 +723,237 @@ body {
   transform: none;
   filter: none;
 }
+
+/* ---------- Home: the empty tab ---------- */
+
+/* Nothing to see: the dock shrinks to a small invisible hot area with faint dots, so there's still
+   somewhere to scroll from. */
+#page-home {
+  left: 0;
+  --pad-right: 0px;
+  width: 28px;
+}
+
+#dock[data-page='home'] #art { opacity: 0 !important; } /* hide the music background too */
+#dock[data-page='home'] #tabs { opacity: 0.5; }
+
+/* ---------- Timer ---------- */
+
+#page-timer {
+  left: 8px;
+  --pad-right: 14px;
+  width: 228px;
+}
+
+/* The same liquid gauge as the battery circles, minus their pop-in. */
+.tm-gauge,
+.sys-gauge { transform: none; }
+
+.tm-gauge { width: 34px; height: 34px; }
+.tm-gauge.rest { --tint: rgba(126, 226, 168, 0.42); } /* breaks are green */
+
+.tm-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.tm-time {
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+  transition: opacity 250ms ease;
+}
+
+.tm-time.idle { opacity: 0.65; }
+
+.tm-label {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.3;
+  opacity: 0.7;
+}
+
+.tm-step { width: 20px; height: 20px; }
+.tm-step svg { width: 12px; height: 12px; }
+
+.tm-skip { width: 22px; height: 22px; }
+.fl-btn svg.solid { fill: #fff; stroke: none; }
+.tm-skip svg { width: 12px; height: 12px; }
+
+.tm-play {
+  width: 28px;
+  height: 28px;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.tm-play:hover { background: rgba(255, 255, 255, 0.28); }
+
+/* Play and pause swap with a little pop, like the music controls. */
+.tm-play { position: relative; }
+.tm-play svg {
+  grid-area: 1 / 1;
+  width: 14px;
+  height: 14px;
+  transition: transform 350ms var(--spring), opacity 200ms ease;
+}
+
+#page-timer:not(.running) .tm-play .i-pause,
+#page-timer.running .tm-play .i-play {
+  opacity: 0;
+  transform: scale(0.3) rotate(-60deg);
+}
+
+.fl-pill.on { background: rgba(255, 255, 255, 0.32); }
+
+/* ---------- System ---------- */
+
+#page-system {
+  left: 8px;
+  --pad-right: 14px;
+  width: 228px;
+  justify-content: space-between;
+}
+
+.sys-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sys-gauge { width: 30px; height: 30px; }
+.sys-gauge .gauge-label { font-size: 10px; }
+.sys-gauge.hot { --tint: rgba(255, 107, 107, 0.55); } /* the water turns red when it's running hot */
+
+/* The water moves a little slower than the 2s sampling, so it flows rather than jumps. */
+.sys-gauge .water { transition-duration: 1400ms; }
+
+.sys-name {
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0.75;
+}
+
+.sys-net {
+  min-width: 74px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.35;
+}
+
+.sys-net .sys-up { opacity: 0.7; }
+
+/* ---------- Timer alarm ---------- */
+
+/* The background glows orange-red, with a brighter wash that pulses (opacity only, so it's cheap). */
+#alarm-glow {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  background: linear-gradient(105deg, #ff8a1f, #ec3b12 58%, #c91f0a);
+  transition: opacity 350ms ease;
+}
+
+#alarm-glow::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  background: radial-gradient(ellipse at 28% 50%, rgba(255, 226, 120, 0.95), rgba(255, 150, 60, 0) 72%);
+}
+
+#dock.alarm #alarm-glow { opacity: 1; }
+#dock.alarm #alarm-glow::after { animation: alarm-pulse 1.5s ease-in-out infinite; }
+
+/* Same 1.5s beat as the shake: it flashes during each burst, then holds still while the shake rests.
+   (An animation that never rests keeps redrawing the window, which costs a lot of CPU.) */
+@keyframes alarm-pulse {
+  0% { opacity: 0.15; }
+  12% { opacity: 0.9; }
+  26% { opacity: 0.2; }
+  40% { opacity: 0.85; }
+  54%, 100% { opacity: 0.4; }
+}
+
+/* The whole dock shakes like jelly in bursts (squashing and stretching as it goes), then rests a
+   moment before the next burst. It stays inside the window's 4px of spare room. */
+#dock.alarm {
+  animation: alarm-shake 1.5s infinite;
+  animation-timing-function: cubic-bezier(0.36, 0.07, 0.19, 0.97);
+}
+
+@keyframes alarm-shake {
+  0%, 52%, 100% { transform: none; }
+  4%  { transform: translateX(-3px) skewX(3deg) scale(1.02, 0.97); }
+  10% { transform: translateX(3px) skewX(-3.5deg) scale(0.98, 1.03); }
+  16% { transform: translateX(-3px) skewX(3deg) scale(1.03, 0.97); }
+  22% { transform: translateX(2.5px) skewX(-2.5deg) scale(0.99, 1.02); }
+  28% { transform: translateX(-2px) skewX(2deg) scale(1.02, 0.98); }
+  35% { transform: translateX(1.5px) skewX(-1.2deg) scale(0.995, 1.01); }
+  42% { transform: translateX(-0.8px) skewX(0.6deg); }
+}
+
+#page-alarm {
+  left: 12px;
+  --pad-right: 12px;
+  width: 226px;
+  gap: 10px;
+}
+
+.alarm-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  text-shadow: 0 1px 3px rgba(80, 10, 0, 0.35);
+}
+
+.alarm-title {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.alarm-status {
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.25;
+  opacity: 0.92;
+}
+
+.alarm-stop {
+  flex: none;
+  height: 28px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 14px;
+  background: #fff;
+  color: #d1260b;
+  font: 700 12px 'Segoe UI Variable Text', 'Segoe UI', sans-serif;
+  cursor: pointer;
+  outline: none;
+  transition: transform 250ms var(--spring), background-color 150ms ease;
+}
+
+.alarm-stop:hover { background: #ffe9e2; }
+.alarm-stop:active { transform: scale(0.92); }

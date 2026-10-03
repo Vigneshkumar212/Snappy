@@ -1,5 +1,6 @@
 const { app, BrowserWindow, globalShortcut, ipcMain, screen } = require('electron');
 const { spawn } = require('child_process');
+const os = require('os');
 const path = require('path');
 const shelf = require('./shelf');
 
@@ -49,6 +50,7 @@ function createWindow() {
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       backgroundThrottling: false, // the dock is never focused; keep animations running
+      autoplayPolicy: 'no-user-gesture-required', // so the timer's chime can play without a click
     },
   });
 
@@ -89,7 +91,10 @@ function runWatcher(script, onLine) {
     lines.forEach((line) => line.trim() && onLine(line.trim()));
   });
 
-  app.on('will-quit', () => watcher.kill());
+  // Kill it on quit, and stop listening once it's gone (watchers can be started and stopped repeatedly).
+  const killOnQuit = () => watcher.kill();
+  app.on('will-quit', killOnQuit);
+  watcher.once('exit', () => app.removeListener('will-quit', killOnQuit));
   return watcher;
 }
 
@@ -132,6 +137,67 @@ function watchMedia() {
     if (win && !win.isDestroyed()) win.webContents.send('media:update', media);
   });
 }
+
+// System glance (CPU, memory, network speed). Only sampled while the System tab is open: the page
+// tells us when it's showing, so nothing runs the rest of the time.
+let systemTimer = null;
+let networkWatcher = null;
+let previousCpu = null;
+let lastNetwork = { down: 0, up: 0 };
+
+function cpuTimes() {
+  let idle = 0;
+  let total = 0;
+  for (const cpu of os.cpus()) {
+    idle += cpu.times.idle;
+    for (const time of Object.values(cpu.times)) total += time;
+  }
+  return { idle, total };
+}
+
+function sampleSystem() {
+  if (!systemTimer || !win || win.isDestroyed()) return;
+
+  const now = cpuTimes();
+  const idle = now.idle - previousCpu.idle;
+  const total = now.total - previousCpu.total;
+  previousCpu = now;
+
+  const memoryTotal = os.totalmem();
+  const memoryUsed = memoryTotal - os.freemem();
+
+  win.webContents.send('system:update', {
+    cpu: total > 0 ? Math.round((1 - idle / total) * 100) : 0,
+    ram: Math.round((memoryUsed / memoryTotal) * 100),
+    ramUsed: memoryUsed,
+    ramTotal: memoryTotal,
+    down: lastNetwork.down,
+    up: lastNetwork.up,
+  });
+}
+
+function setSystemWatch(on) {
+  if (on && !systemTimer) {
+    previousCpu = cpuTimes();
+    systemTimer = setInterval(sampleSystem, 2000);
+    setTimeout(sampleSystem, 600); // a first reading quickly, rather than after two seconds
+    networkWatcher = runWatcher('network-watch.ps1', (line) => {
+      try {
+        lastNetwork = JSON.parse(line);
+      } catch {
+        // ignore a garbled line
+      }
+    });
+  } else if (!on && systemTimer) {
+    clearInterval(systemTimer);
+    systemTimer = null;
+    if (networkWatcher) networkWatcher.kill();
+    networkWatcher = null;
+    lastNetwork = { down: 0, up: 0 };
+  }
+}
+
+ipcMain.on('system:watch', (_event, on) => setSystemWatch(Boolean(on)));
 
 ipcMain.handle('bluetooth:get', () => lastBluetooth);
 ipcMain.handle('media:get', () => lastMedia);

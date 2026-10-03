@@ -23,6 +23,12 @@ contextBridge.exposeInMainWorld('snappy', {
     startDrag: (id) => ipcRenderer.send('files:start-drag', id),
   },
 
+  // CPU, memory and network speed. Sampling only runs while watch(true) is in effect.
+  system: {
+    watch: (on) => ipcRenderer.send('system:watch', on),
+    onChange: (callback) => ipcRenderer.on('system:update', (_event, stats) => callback(stats)),
+  },
+
   media: {
     // Latest track ({ key, title, artist, album, app, status, pos, dur, art }) or null when nothing plays.
     get: () => ipcRenderer.invoke('media:get'),

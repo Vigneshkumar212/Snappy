@@ -26,7 +26,9 @@ No window to manage. No icon to click. It's just there when you glance down.
 
 ## Meet the tabs
 
-Scroll over the dock to flip between tabs. Tiny dots show where you are, and a tab only appears when it has something to show.
+Scroll over the dock to flip between tabs. Tiny dots show where you are.
+
+Music, Devices and Files appear on their own when they have something to show. At the very top is an **empty tab** that shows nothing at all, a clean taskbar whenever you want one. At the bottom, **Timer** and **System** are always there but never pushy: music starting won't pull you off your timer.
 
 ### 🎵 Music
 Whatever's playing, front and centre. Spotify, a browser tab, anything that shows up in Windows' media controls.
@@ -46,6 +48,18 @@ A drop shelf for the things you need in a minute.
 - **Drag anything over the dock** (a file, a folder, an image, a snippet of text) and it jumps to a *Drop to Snappy* target, whichever tab you were on.
 - Swipe back to the shelf whenever you like and **drag it straight back out**.
 - Tap the three dots for **Remove, Copy path, Copy file**, in a full-width row, because the dock is small and you shouldn't have to aim.
+
+### ⏱ Timer
+A **Pomodoro** or a plain **countdown**, with a gauge that drains like water as the time runs down.
+
+- Pomodoro runs 25 minutes of focus and 5 of break, with a longer break every fourth round. Breaks start by themselves; the next focus waits for you.
+- Switch to a countdown and step it through 1, 2, 3, 5, 10, 15, 20, 25, 30, 45, 60 or 90 minutes.
+- It keeps running while you're on another tab, and its dot stays green so you know. When a phase ends the dock turns **glowing orange-red, shakes like jelly and beeps until you press Stop** (a Pomodoro break only starts once you do).
+
+### 📊 System
+CPU and memory as liquid gauges (the water turns red when things run hot), plus live network speed.
+
+- It only measures while the tab is on screen, so it costs nothing the rest of the time.
 
 ## Feels like part of Windows
 
@@ -84,10 +98,11 @@ Electron can't see most of this on its own, so three small PowerShell scripts in
 | [`fullscreen-watch.ps1`](scripts/fullscreen-watch.ps1) | `SHQueryUserNotificationState` | Hiding the dock while something is full-screen |
 | [`bluetooth-watch.ps1`](scripts/bluetooth-watch.ps1) | PnP device properties (`IsConnected`, battery level) | Which devices are connected, and their battery |
 | [`media-watch.ps1`](scripts/media-watch.ps1) | WinRT `GlobalSystemMediaTransportControlsSessionManager` | Track, artwork, play state, and the play/pause/next/previous commands |
+| [`network-watch.ps1`](scripts/network-watch.ps1) | .NET `NetworkInterface` statistics | Network speed (only runs while the System tab is open) |
 
 Dropped files are only *referenced*, never copied. Text and images dragged out of a web page have no file on disk, so those go to a temp folder that's cleared when Snappy quits. **Copy file** puts a real file on the clipboard the way Explorer does, so it pastes straight into a folder.
 
-**Performance.** Redrawing an always-on-top window is the expensive part, so nothing runs continuously: the progress line is nudged twice a second, long titles scroll once per track (and loop only while you hover), and the watchers poll every 0.4 to 1.5 seconds.
+**Performance.** Redrawing an always-on-top window is the expensive part, so nothing runs continuously: the progress line is nudged twice a second, long titles scroll once per track (and loop only while you hover), and the watchers poll every 0.4 to 1.5 seconds. The System tab is the priciest (about 10% of a core while you're looking at it), which is why it measures nothing until you open it.
 
 **Layout**
 
@@ -101,6 +116,8 @@ renderer.js      dock sizing, tabs, scrolling, page switching
 nowplaying.js    the Music tab
 bluetooth.js     the Devices tab and the connect/disconnect notices
 files.js         the Files tab
+timer.js         the Timer tab (Pomodoro and countdown)
+system.js        the System tab (CPU, memory, network)
 scripts/         the PowerShell watchers above
 ```
 
