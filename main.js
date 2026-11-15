@@ -6,7 +6,8 @@ const shelf = require('./shelf');
 
 const DOCK_MARGIN = 4; // visible gap between the dock and the screen/taskbar edges
 const SHADOW_PAD = 4; // extra transparent room around the dock for its shadow (keep in sync with --pad in styles.css)
-const FALLBACK_TASKBAR_HEIGHT = 48; // used when the taskbar is auto-hidden
+const FALLBACK_TASKBAR_THICKNESS = 48; // used when the taskbar's size can't be worked out
+const SIDE_DOCK_HEIGHT = 48; // the dock's height when it sits beside a vertical taskbar
 const MIN_DOCK_WIDTH = 40;
 const MAX_DOCK_WIDTH = 720;
 
@@ -15,26 +16,88 @@ let dockWidth = 240; // the renderer reports the real width once it has laid out
 let lastBluetooth = null;
 let lastMedia = null;
 let mediaWatcher = null;
+let taskbarReport = null; // { edge, size } from taskbar-watch.ps1, once it has reported
+let sentPlacement = null; // the edge/anchor last told to the page
 
-// Bounds that sit inside the left end of the taskbar, bottom-left of the primary display.
+// Which edge of the primary display the taskbar is on, and how thick it is (in Electron's units).
+function getTaskbar() {
+  const { bounds, workArea } = screen.getPrimaryDisplay();
+
+  // The watcher asks Windows directly, so it also knows where an auto-hidden taskbar is.
+  if (taskbarReport) {
+    const { edge, size } = taskbarReport;
+    const across = edge === 'left' || edge === 'right' ? bounds.width : bounds.height;
+    const thickness = Math.round(size * across);
+    if (thickness > 0) return { edge, thickness };
+  }
+
+  // Until then: the taskbar is on the side where the work area stops short of the screen.
+  const gaps = {
+    bottom: bounds.y + bounds.height - (workArea.y + workArea.height),
+    top: workArea.y - bounds.y,
+    left: workArea.x - bounds.x,
+    right: bounds.x + bounds.width - (workArea.x + workArea.width),
+  };
+  const edge = Object.keys(gaps).reduce((best, side) => (gaps[side] > gaps[best] ? side : best));
+  if (gaps[edge] > 0) return { edge, thickness: gaps[edge] };
+  return { edge: 'bottom', thickness: FALLBACK_TASKBAR_THICKNESS }; // auto-hidden: assume the default
+}
+
+// Where the dock goes, and which side it's anchored to (it grows away from that side).
+// On a horizontal taskbar it sits inside the taskbar's left end, as tall as the taskbar. A vertical
+// taskbar is too narrow to hold it, so it sits on the desktop beside the taskbar, in the bottom
+// corner, and grows away from it (rightwards from a left taskbar, leftwards from a right one).
 // The window is SHADOW_PAD larger than the dock on every side; the page insets the dock by the
 // same amount, so the dock itself stays DOCK_MARGIN from the edges and its shadow has room.
-function getDockBounds() {
-  const { bounds, workArea } = screen.getPrimaryDisplay();
-  const taskbarHeight = bounds.height - workArea.height || FALLBACK_TASKBAR_HEIGHT;
+function getPlacement() {
+  const { bounds } = screen.getPrimaryDisplay();
+  const { edge, thickness } = getTaskbar();
   const inset = DOCK_MARGIN - SHADOW_PAD;
+  const width = dockWidth + SHADOW_PAD * 2;
+  const screenRight = bounds.x + bounds.width;
+  const screenBottom = bounds.y + bounds.height;
+
+  if (edge === 'top' || edge === 'bottom') {
+    return {
+      edge,
+      anchor: 'left',
+      bounds: {
+        x: bounds.x + inset,
+        y: edge === 'top' ? bounds.y + inset : screenBottom - thickness + inset,
+        width,
+        height: thickness - inset * 2,
+      },
+    };
+  }
 
   return {
-    x: bounds.x + inset,
-    y: bounds.y + bounds.height - taskbarHeight + inset,
-    width: dockWidth + SHADOW_PAD * 2,
-    height: taskbarHeight - inset * 2,
+    edge,
+    anchor: edge,
+    bounds: {
+      x: edge === 'left' ? bounds.x + thickness + inset : screenRight - thickness - inset - width,
+      y: screenBottom - SIDE_DOCK_HEIGHT + inset,
+      width,
+      height: SIDE_DOCK_HEIGHT - inset * 2,
+    },
   };
+}
+
+// Moves the dock to where it belongs right now, and tells the page if the side it grows from changed.
+function placeDock() {
+  if (!win || win.isDestroyed()) return;
+
+  const { edge, anchor, bounds } = getPlacement();
+  win.setBounds(bounds);
+
+  if (!sentPlacement || sentPlacement.edge !== edge || sentPlacement.anchor !== anchor) {
+    sentPlacement = { edge, anchor };
+    win.webContents.send('dock:placement', sentPlacement);
+  }
 }
 
 function createWindow() {
   win = new BrowserWindow({
-    ...getDockBounds(),
+    ...getPlacement().bounds,
     frame: false,
     resizable: false,
     movable: false,
@@ -60,6 +123,12 @@ function createWindow() {
 
   win.loadFile('index.html');
   win.once('ready-to-show', () => win.showInactive());
+
+  // The page needs to know which side the dock grows from; resend it after every (re)load.
+  win.webContents.on('did-finish-load', () => {
+    sentPlacement = null;
+    placeDock();
+  });
 
   // Windows can knock us behind the taskbar when it takes focus; reassert.
   win.on('blur', () => win.setAlwaysOnTop(true, 'screen-saver'));
@@ -105,6 +174,22 @@ function watchFullscreen() {
     if (!win || win.isDestroyed()) return;
     if (line === '1') win.hide();
     else if (line === '0') win.showInactive();
+  });
+}
+
+// Which edge the taskbar is on and how thick it is. Moving or resizing the taskbar re-docks.
+function watchTaskbar() {
+  runWatcher('taskbar-watch.ps1', (line) => {
+    let report;
+    try {
+      report = JSON.parse(line);
+    } catch {
+      return;
+    }
+    if (!report || !['top', 'bottom', 'left', 'right'].includes(report.edge) || !(report.size > 0)) return;
+
+    taskbarReport = report;
+    placeDock();
   });
 }
 
@@ -212,11 +297,12 @@ ipcMain.on('media:command', (_event, command) => {
 ipcMain.on('dock:set-width', (_event, width) => {
   if (!win || win.isDestroyed() || !Number.isFinite(width)) return;
   dockWidth = Math.min(MAX_DOCK_WIDTH, Math.max(MIN_DOCK_WIDTH, Math.ceil(width)));
-  win.setBounds(getDockBounds());
+  placeDock();
 });
 
 app.whenReady().then(() => {
   createWindow();
+  watchTaskbar();
   watchFullscreen();
   watchBluetooth();
   watchMedia();
@@ -225,11 +311,10 @@ app.whenReady().then(() => {
   // The dock is frameless and unfocusable, so give it a way out.
   globalShortcut.register('Control+Alt+Q', () => app.quit());
 
-  // Re-dock if resolution, scaling or taskbar size changes.
-  const redock = () => win && win.setBounds(getDockBounds());
-  screen.on('display-metrics-changed', redock);
-  screen.on('display-added', redock);
-  screen.on('display-removed', redock);
+  // Re-dock if resolution, scaling or the taskbar's size or edge changes.
+  screen.on('display-metrics-changed', placeDock);
+  screen.on('display-added', placeDock);
+  screen.on('display-removed', placeDock);
 });
 
 app.on('window-all-closed', () => app.quit());

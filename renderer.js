@@ -342,4 +342,13 @@ dock.addEventListener('wheel', (event) => {
   }
 }, { passive: true });
 
+// ---------- placement ----------
+
+// The main process says which screen edge the taskbar is on and which side the dock is anchored to.
+// Next to a taskbar on the right the dock is anchored right, so it grows (and bounces) leftwards.
+window.snappy.onPlacement(({ edge, anchor }) => {
+  document.body.dataset.edge = edge;
+  document.body.dataset.anchor = anchor;
+});
+
 choosePage();

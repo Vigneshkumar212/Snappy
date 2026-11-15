@@ -96,7 +96,7 @@ npm start
 
 The first install downloads Electron, so give it a minute. Snappy appears at the left end of your taskbar. Press `Ctrl+Alt+Q` to quit.
 
-> **Tip:** it assumes the Windows 11 default of centred taskbar icons. With left-aligned icons it would sit on top of them.
+> **Tip:** Snappy finds your taskbar on any edge. On a bottom or top taskbar it sits inside the left end, which assumes the Windows 11 default of centred icons (with left-aligned icons it would sit on top of them). Next to a vertical taskbar (left or right) it sits on the desktop beside it, in the bottom corner, and grows away from it.
 
 ---
 
@@ -107,10 +107,11 @@ The first install downloads Electron, so give it a minute. Snappy appears at the
 
 Built with Electron and plain JavaScript and CSS: no framework, no bundler, no native modules. The only dependency is Electron itself.
 
-Electron can't see most of this on its own, so three small PowerShell scripts in [`scripts/`](scripts) watch Windows and report back one JSON line per change. The main process starts them, forwards what they print to the page over IPC, and they exit by themselves if Snappy does.
+Electron can't see most of this on its own, so a few small PowerShell scripts in [`scripts/`](scripts) watch Windows and report back one JSON line per change. The main process starts them, forwards what they print to the page over IPC, and they exit by themselves if Snappy does.
 
 | Script | Windows API | Used for |
 | --- | --- | --- |
+| [`taskbar-watch.ps1`](scripts/taskbar-watch.ps1) | `SHAppBarMessage` (`ABM_GETTASKBARPOS`) | Which screen edge the taskbar is on and how thick it is, even when auto-hidden |
 | [`fullscreen-watch.ps1`](scripts/fullscreen-watch.ps1) | `SHQueryUserNotificationState` | Hiding the dock while something is full-screen |
 | [`bluetooth-watch.ps1`](scripts/bluetooth-watch.ps1) | PnP device properties (`IsConnected`, battery level) | Which devices are connected, and their battery |
 | [`media-watch.ps1`](scripts/media-watch.ps1) | WinRT `GlobalSystemMediaTransportControlsSessionManager` | Track, artwork, play state, and the play/pause/next/previous commands |

@@ -40,6 +40,10 @@ body {
   border-radius: 10px;
 }
 
+/* Anchored to the right (beside a taskbar on the right edge): keep the dock's right edge still, so it
+   grows and bounces leftwards, away from the taskbar. The window grows leftwards to match (main.js). */
+body[data-anchor='right'] #dock { margin-left: auto; }
+
 /* ---------- Pages ---------- */
 
 /* Only one page is shown at a time. The leaving page slides up and blurs out; the entering one springs in. */

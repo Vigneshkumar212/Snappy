@@ -2,6 +2,8 @@ const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('snappy', {
   setDockWidth: (width) => ipcRenderer.send('dock:set-width', width),
+  // Which edge the taskbar is on and which side the dock grows from: { edge, anchor: 'left' | 'right' }.
+  onPlacement: (callback) => ipcRenderer.on('dock:placement', (_event, placement) => callback(placement)),
 
   bluetooth: {
     // Resolves to the latest list of connected devices, or null if none has been reported yet.
