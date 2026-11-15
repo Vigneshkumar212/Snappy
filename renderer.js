@@ -76,13 +76,86 @@ function bounceDock(from, to) {
   );
 }
 
-// Size the dock to the active page. `bounce` forces the animation even if the width is unchanged.
+// ---------- the tile (vertical taskbar) ----------
+
+// On a vertical taskbar the dock rests as a small tile inside the taskbar, showing just the active
+// tab's "face" (the cover, a battery ring, the timer's gauge...). It opens out over the desktop while
+// you hover it, and on its own when something takes over the dock (a new track, a device connecting,
+// a drop, a notice, the alarm), closing again once that's over. `tileWidth` is null on a horizontal
+// taskbar, where the dock is always open.
+let tileWidth = null;
+let hovering = false;
+let hoverTimer;
+let tileFace = null;
+
+const HOVER_CLOSE_MS = 400; // how long the pointer can stray off the dock before it closes again
+
+// The one element each tab keeps showing in the tile, centred.
+const TILE_FACES = {
+  home: '.home-mark',
+  media: '.cover',
+  bluetooth: '.chip .gauge',
+  files: '.fl-thumb',
+  timer: '.tm-gauge',
+  system: '.sys-gauge',
+};
+
+function isOpen() {
+  if (tileWidth === null) return true;
+  if (hovering || moveActive || dragActive || alarmActive || activePage === 'notice') return true;
+  return Date.now() < holdUntil && activePage === holdTab; // a tab that's showing itself for a moment
+}
+
+// Marks the active tab's face and slides the page sideways so the face sits in the tile's centre.
+// Everything else on the page is hidden by CSS while collapsed.
+function centreTileFace(page) {
+  const face = TILE_FACES[activePage] ? page.querySelector(TILE_FACES[activePage]) : null;
+  if (face !== tileFace) {
+    if (tileFace) tileFace.classList.remove('tile-face');
+    if (face) face.classList.add('tile-face');
+    tileFace = face;
+  }
+  if (!face) return dock.style.setProperty('--tile-shift', '0px');
+
+  // Both rectangles move with the page's own slide, so their difference is the face's place on the page.
+  const pageRect = page.getBoundingClientRect();
+  const faceRect = face.getBoundingClientRect();
+  const centre = page.offsetLeft + (faceRect.left - pageRect.left) + faceRect.width / 2;
+  dock.style.setProperty('--tile-shift', `${Math.round(tileWidth / 2 - centre)}px`);
+}
+
+dock.addEventListener('mouseenter', () => {
+  clearTimeout(hoverTimer);
+  if (hovering) return;
+  hovering = true;
+  if (tileWidth !== null) layoutDock();
+});
+
+dock.addEventListener('mouseleave', () => {
+  clearTimeout(hoverTimer);
+  hoverTimer = setTimeout(() => {
+    hovering = false;
+    if (tileWidth !== null) layoutDock();
+  }, HOVER_CLOSE_MS);
+});
+
+// Size the dock to the active page (or to the tile, while collapsed). `bounce` forces the animation
+// even if the width is unchanged.
 function layoutDock({ bounce = false } = {}) {
   const page = pages[activePage || 'bluetooth'];
-  const style = getComputedStyle(page);
-  const padLeft = parseFloat(style.left) || 0;                                   // each page sets its own insets
-  const padRight = parseFloat(style.getPropertyValue('--pad-right')) || padLeft; // (right defaults to the left)
-  const width = Math.ceil(padLeft + page.offsetWidth + padRight);
+  const collapsed = !isOpen();
+  dock.classList.toggle('collapsed', collapsed);
+
+  let width;
+  if (collapsed) {
+    width = tileWidth;
+    centreTileFace(page);
+  } else {
+    const style = getComputedStyle(page);
+    const padLeft = parseFloat(style.left) || 0;                                   // each page sets its own insets
+    const padRight = parseFloat(style.getPropertyValue('--pad-right')) || padLeft; // (right defaults to the left)
+    width = Math.ceil(padLeft + page.offsetWidth + padRight);
+  }
 
   const from = dock.getBoundingClientRect().width;
   dock.style.width = `${width}px`;
@@ -342,13 +415,85 @@ dock.addEventListener('wheel', (event) => {
   }
 }, { passive: true });
 
+// ---------- moving the dock ----------
+
+// Press and hold anywhere on the dock (without moving) and it lifts; then drag it wherever you like.
+// Drop it on the taskbar to send it back there. A quick press, a normal click and dragging a file out
+// of the shelf all work as before, since those either let go or move before the hold completes.
+const HOLD_TO_MOVE_MS = 450;
+const HOLD_SLOP_PX = 4; // moving further than this before the hold completes cancels it
+
+let hold = null; // { id, x, y, timer } while a press might become a move
+let moveActive = false;
+let swallowClick = false; // the click that ends a move mustn't press whatever is under the pointer
+
+function cancelHold() {
+  if (!hold) return;
+  clearTimeout(hold.timer);
+  hold = null;
+}
+
+function beginMove(pointerId) {
+  hold = null;
+  moveActive = true;
+  swallowClick = true;
+  try {
+    dock.setPointerCapture(pointerId);
+  } catch {
+    // the pointer is already gone; the pointerup below still ends the move
+  }
+  dock.classList.add('moving');
+  dock.animate([{ scale: 1 }, { scale: 0.94 }, { scale: 1 }], { duration: 300, easing: 'cubic-bezier(0.34, 1.56, 0.64, 1)' });
+  window.snappy.startMove();
+}
+
+function endMove() {
+  cancelHold();
+  if (!moveActive) return;
+  moveActive = false;
+  dock.classList.remove('moving');
+  window.snappy.endMove();
+}
+
+dock.addEventListener('pointerdown', (event) => {
+  if (event.button !== 0 || moveActive) return;
+  swallowClick = false;
+  cancelHold();
+  const { pointerId, screenX, screenY } = event;
+  hold = { id: pointerId, x: screenX, y: screenY, timer: setTimeout(() => beginMove(pointerId), HOLD_TO_MOVE_MS) };
+}, true);
+
+dock.addEventListener('pointermove', (event) => {
+  if (hold && Math.hypot(event.screenX - hold.x, event.screenY - hold.y) > HOLD_SLOP_PX) cancelHold();
+}, true);
+
+dock.addEventListener('pointerup', endMove, true);
+dock.addEventListener('pointercancel', endMove, true);
+dock.addEventListener('lostpointercapture', () => { if (moveActive) endMove(); });
+
+// While it's lifted, don't let the press start a file drag or end in a click.
+dock.addEventListener('dragstart', (event) => {
+  if (moveActive) event.preventDefault();
+}, true);
+
+dock.addEventListener('click', (event) => {
+  if (!swallowClick) return;
+  swallowClick = false;
+  event.preventDefault();
+  event.stopPropagation();
+}, true);
+
 // ---------- placement ----------
 
 // The main process says which screen edge the taskbar is on and which side the dock is anchored to.
 // Next to a taskbar on the right the dock is anchored right, so it grows (and bounces) leftwards.
-window.snappy.onPlacement(({ edge, anchor }) => {
+// On a vertical taskbar it also sends the tile's width, and the dock rests as that tile.
+window.snappy.onPlacement(({ edge, anchor, tile }) => {
   document.body.dataset.edge = edge;
   document.body.dataset.anchor = anchor;
+  document.body.classList.toggle('tile-mode', Number.isFinite(tile));
+  tileWidth = Number.isFinite(tile) ? tile : null;
+  layoutDock();
 });
 
 choosePage();

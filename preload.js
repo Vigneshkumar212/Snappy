@@ -2,7 +2,11 @@ const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('snappy', {
   setDockWidth: (width) => ipcRenderer.send('dock:set-width', width),
-  // Which edge the taskbar is on and which side the dock grows from: { edge, anchor: 'left' | 'right' }.
+  // Dragging the dock to a new place: the main process moves the window with the pointer in between.
+  startMove: () => ipcRenderer.send('dock:move-start'),
+  endMove: () => ipcRenderer.send('dock:move-end'),
+  // Where the dock is: { edge, anchor: 'left' | 'right', tile }. `tile` is the collapsed width on a
+  // vertical taskbar (the dock rests as a small tile and opens on hover), or null on a horizontal one.
   onPlacement: (callback) => ipcRenderer.on('dock:placement', (_event, placement) => callback(placement)),
 
   bluetooth: {

@@ -44,6 +44,37 @@ body {
    grows and bounces leftwards, away from the taskbar. The window grows leftwards to match (main.js). */
 body[data-anchor='right'] #dock { margin-left: auto; }
 
+/* ---------- The tile (vertical taskbar) ---------- */
+
+/* On a vertical taskbar the dock rests as a small tile showing only the active tab's face (marked
+   .tile-face from renderer.js), slid sideways into the tile's centre. Everything else on the page
+   keeps its place but is hidden, so opening the dock is just a matter of widening it. */
+body.tile-mode #dock { overflow-x: clip; } /* the page's hidden content mustn't show past the dock while it opens */
+
+#dock.collapsed .page.active { translate: var(--tile-shift, 0px) 0; }
+#dock.collapsed .page.active * { visibility: hidden; }
+#dock.collapsed .page.active .tile-face,
+#dock.collapsed .page.active .tile-face * { visibility: visible; }
+#dock.collapsed #tabs { display: none; }
+
+/* Lifted to be moved (press and hold, then drag): a touch brighter, with a grabbing hand. */
+#dock.moving { cursor: grabbing; filter: brightness(1.15); }
+#dock.moving * { cursor: grabbing !important; }
+
+/* Home's face: the "S", only ever shown in the tile. */
+.home-mark {
+  display: none;
+  position: absolute;
+  left: 0;
+  top: 50%;
+  translate: 0 -50%;
+  font-size: 19px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+#dock.collapsed .home-mark { display: block; }
+
 /* ---------- Pages ---------- */
 
 /* Only one page is shown at a time. The leaving page slides up and blurs out; the entering one springs in. */
@@ -70,7 +101,7 @@ body[data-anchor='right'] #dock { margin-left: auto; }
   pointer-events: auto;
   transform: none;
   filter: none;
-  transition: none;
+  transition: translate 600ms var(--spring); /* sliding the face into or out of the tile (see below) */
   animation: page-in 700ms var(--spring) both;
 }
 

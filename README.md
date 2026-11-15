@@ -96,7 +96,9 @@ npm start
 
 The first install downloads Electron, so give it a minute. Snappy appears at the left end of your taskbar. Press `Ctrl+Alt+Q` to quit.
 
-> **Tip:** Snappy finds your taskbar on any edge. On a bottom or top taskbar it sits inside the left end, which assumes the Windows 11 default of centred icons (with left-aligned icons it would sit on top of them). Next to a vertical taskbar (left or right) it sits on the desktop beside it, in the bottom corner, and grows away from it.
+> **Tip:** Snappy finds your taskbar on any edge. On a bottom or top taskbar it sits inside the left end, which assumes the Windows 11 default of centred icons (with left-aligned icons it would sit on top of them). On a vertical taskbar (left or right) it rests as a small tile inside the taskbar, just above the clock, showing only the current tab's face (the cover, a battery ring, the timer). Hover it and it opens out over the desktop; it also opens by itself when something happens (a new track, a device connecting, a drop, the alarm) and closes again afterwards.
+>
+> **Move it anywhere:** press and hold the dock for half a second until it lifts, then drag it. Wherever you drop it, it stays (even after a restart) as a small tile that opens on hover, growing towards the middle of the screen. Drop it back on the taskbar to put it back there.
 
 ---
 
